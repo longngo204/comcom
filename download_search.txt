@@ -1,0 +1,20 @@
+@app.route("/download_results", methods=["GET"])
+def download_results():
+    # Download the last search results as an Excel file
+    last_results = session.get("last_results")
+    if not last_results:
+        flash("No results to download.", "error")
+        return redirect(url_for("index"))
+    df = pd.DataFrame(last_results)
+    from io import BytesIO
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Similar Complaints")
+    output.seek(0)
+    from flask import send_file
+    return send_file(
+        output,
+        download_name="similar_complaints.xlsx",
+        as_attachment=True,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

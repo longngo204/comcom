@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Text Ingest + Similarity Search</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    .spinner {
+      display: none;
+      margin-left: 1rem;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #333;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
+    h1 { margin-bottom: 0.5rem; }
+    form { margin: 1rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    .msg { padding: 0.5rem 0; }
+    .flash { padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 0.5rem; }
+    .flash.success { background: #e6ffed; border: 1px solid #9ae6b4; }
+    .flash.error { background: #ffe6e6; border: 1px solid #feb2b2; }
+    .label { display: block; font-weight: 600; margin: 0.25rem 0; }
+    .input { width: 100%; box-sizing: border-box; padding: 0.6rem; border: 1px solid #ccc; border-radius: 6px; }
+    .button { padding: 0.6rem 1rem; border: 1px solid #333; background: #111; color: white; border-radius: 6px; cursor: pointer; }
+    .button.secondary { background: white; color: #111; }
+    .card { padding: 1rem; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+    ol { padding-left: 1.25rem; }
+    code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Text Ingest + Similarity Search</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form action="{{ url_for('submit_input') }}" method="post" enctype="multipart/form-data" id="inputForm">
+    <h2>Step 1 — Provide Input</h2>
+    <p>Upload a 1-row Excel file with a column named <code>customer note</code> (case-insensitive) <em>or</em> type a free-form query.</p>
+
+    <label class="label" for="excel_file">Excel file (.xlsx)</label>
+    <input class="input" type="file" id="excel_file" name="excel_file" accept=".xls,.xlsx,.xlsm,.xlsb" />
+
+    <div style="margin: 0.75rem 0; text-align: center;">— OR —</div>
+
+  <label class="label" for="free_query">Free-form query</label>
+  <textarea class="input" id="free_query" name="free_query" rows="4" placeholder="Type your query here..."></textarea>
+
+    <div style="margin-top: 0.75rem;">
+      <button class="button" type="submit">Submit Input</button>
+    </div>
+  </form>
+
+  <div class="card">
+    <h2>Current Input</h2>
+    {% if input_text %}
+      <div class="msg"><strong>input text:</strong> {{ input_text }}</div>
+    {% else %}
+      <div class="msg">No input captured yet.</div>
+    {% endif %}
+  </div>
+
+  <form action="{{ url_for('search') }}" method="post" id="searchForm">
+    <h2>Step 2 — Similarity Search</h2>
+    <label class="label" for="top_n">top_n (positive integer)</label>
+    <input class="input" type="number" id="top_n" name="top_n" min="1" placeholder="e.g., 3" required />
+    <div style="margin-top: 0.75rem;">
+      <button class="button" type="submit" id="findSimilarBtn" {% if not input_text %}disabled{% endif %}>Find Similar</button>
+      <span class="spinner" id="spinner"></span>
+      {% if not input_text %}
+        <span style="margin-left: 0.5rem; color: #777;">(enter input first)</span>
+      {% endif %}
+    </div>
+  <script>
+    // Show spinner on Find Similar submit
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+      document.getElementById('spinner').style.display = 'inline-block';
+      document.getElementById('findSimilarBtn').disabled = true;
+    });
+
+    // Allow Shift+Enter for new line in textarea, Enter to submit
+    const textarea = document.getElementById('free_query');
+    textarea.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        // Submit the form (default behavior)
+        // But if inside inputForm, let it submit
+      } else if (e.key === 'Enter' && e.shiftKey) {
+        // Insert new line
+        e.stopPropagation();
+        // Let default happen (new line)
+      }
+    });
+  </script>
+  </form>
+
+  {% if last_results %}
+    <div class="card">
+      <h2>Results (top {{ last_top_n }})</h2>
+      <form method="get" action="{{ url_for('download_results') }}">
+        <button class="button secondary" type="submit">Download Similar Complaints (Excel)</button>
+      </form>
+      <table border="1" cellpadding="6" cellspacing="0">
+        <thead>
+          <tr>
+            {% for col in last_results[0].keys() %}
+              <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in last_results %}
+            <tr>
+              {% for val in row.values() %}
+                <td>{{ val }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
